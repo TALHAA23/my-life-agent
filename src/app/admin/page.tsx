@@ -102,7 +102,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-8 text-black">
       <div className="max-w-2xl mx-auto">
         <header className="mb-8 flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-800">
@@ -162,6 +162,7 @@ export default function AdminPage() {
                   <option value="Bio">Biography / Personal</option>
                   <option value="Project">Project Documentation</option>
                   <option value="Thoughts">Thoughts / Blog</option>
+                  <option value="Interest">Interest / Hobbies</option>
                   <option value="Other">Other</option>
                 </select>
               </div>

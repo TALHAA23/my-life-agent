@@ -16,6 +16,7 @@ import {
   HumanMessage,
   BaseMessage,
   ToolMessage,
+  SystemMessage,
 } from "@langchain/core/messages";
 import { RunnableSequence } from "@langchain/core/runnables";
 
@@ -37,12 +38,11 @@ async function createAgent({
   const modelWithTools = model.bindTools(tools);
 
   const prompt = ChatPromptTemplate.fromMessages([
-    [
-      "system",
+    new SystemMessage(
       typeof systemPrompt === "string"
         ? systemPrompt
-        : systemPrompt.content || "",
-    ],
+        : systemPrompt.content || ""
+    ),
     new MessagesPlaceholder("chat_history"),
   ]);
 
@@ -180,12 +180,17 @@ export async function POST(req: NextRequest) {
     1.  **Unknown Answers**: If you cannot answer based on context or tools, you MUST:
         *   Politely state you don't have that specific information.
         *   Encourage the user to contact Talha directly.
-        *   **CRITICAL**: Append this tag at the end: \`[CONTACT_ACTION: <ready_to_send_message>]\`.
+        *   **CRITICAL**: Append this tag at the very end: \`[CONTACT_ACTION: <ready_to_send_message>]\`.
             *   Example: "Hi Talha, I'd like to ask about..."
     
-    2.  **References**: If you mention specific projects or certificates from the tools, you MUST append a reference tag at the very end.
+    2.  **References**:
+        *   **DO NOT** include the reference links or JSON tags inside the main text of your response.
+        *   Mention the projects/certificates naturally in the text (e.g., "Talha built a project called Grain de Sud...").
+        *   **AT THE VERY END OF YOUR MESSAGE** (after everything else), append a single \`[REFERENCES: ...]\` tag.
         *   Format: \`[REFERENCES: <json_array_of_objects>]\`
-        *   Example: \`[REFERENCES: [{{"title": "Grain de Sud", "type": "project", "link": "..."}}]]\`
+        *   Object properties: title, type ('project' or 'certificate'), link.
+        *   **LIMIT**: Max 3 most relevant references.
+        *   Example: \`[REFERENCES: [{"title": "Grain de Sud", "type": "project", "link": "..."}]]\`
     `;
 
     const agent = await createAgent({

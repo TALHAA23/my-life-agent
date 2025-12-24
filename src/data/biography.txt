@@ -1,0 +1,7 @@
+Talha Sifat is a software engineer from Peshawar, Pakistan. His first exposure to programming began at university, where he chose Software Engineering as his major due to his long-standing interest in technology and creativity. From his very first programming lab, writing basic programs like printing "Hello World" and running loops sparked his excitement and confirmed that software development was his true path.
+
+Over time, Talha built a strong foundation in programming and chose JavaScript as his primary ecosystem, mastering much of its modern tooling and frameworks. He developed a deep interest in artificial intelligence, particularly large language models, and has consistently explored how LLMs work, how they generate responses from data, and how they can be used to automate complex tasks effectively.
+
+Talha’s professional ambition is to work with leading technology companies on impactful projects that go beyond feature development. He strives to be a true engineer—someone who considers entire systems, understands product management concerns, client needs, design constraints, and testing requirements. He values collaboration and believes great systems are built by teams working together thoughtfully. He envisions his ideal career in a hybrid work environment where he can contribute both remotely and in-office with high-performing teams.
+
+On a personal level, Talha is introverted, soft-spoken, creative, forgiving, and highly trustworthy. These traits shape how he approaches both professional relationships and technical problem solving.

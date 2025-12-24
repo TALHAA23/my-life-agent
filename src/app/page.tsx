@@ -2,7 +2,14 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Folder, Briefcase, Award, ExternalLink } from "lucide-react";
+import {
+  Folder,
+  Briefcase,
+  Award,
+  ExternalLink,
+  AlertCircle,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 export default function Home() {
   const [messages, setMessages] = useState<
@@ -22,6 +29,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,14 +39,18 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!input.trim() || isLoading) return;
 
     const userMessage = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
 
     try {
       const response = await fetch("/api/chat", {
@@ -52,6 +64,9 @@ export default function Home() {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
       if (!response.body) throw new Error("No response body");
 
       const reader = response.body.getReader();
@@ -79,74 +94,137 @@ export default function Home() {
           displayContent = displayContent.replace(contactMatch[0], "").trim();
         }
 
-        // 2. Check for References (Robust Parsing via Split)
-        const refTag = "[REFERENCES:";
-        const refIndex = displayContent.lastIndexOf(refTag);
+        // 2. Check for References (Global Regex Replace)
+        // Match all occurrences of [REFERENCES: ... ]
+        // We use a regex that matches [REFERENCES: followed by non-greedy anything until ]] or ]
+        // Ideally JSON ends with ]].
+        const refRegex = /\[REFERENCES:\s*(\[.*?\])\]/g;
+        let match;
+        const allRefs = [];
 
-        if (refIndex !== -1) {
-          const rawRefString = displayContent.substring(refIndex);
-          const closingIndex = rawRefString.lastIndexOf("]");
+        // We might have multiple tags, we want to extract them all and remove them all from text.
+        // We clone displayContent to modify it cleanly.
+        let finalDisplayContent = displayContent;
 
-          if (closingIndex !== -1) {
-            // Try to extract JSON part: [REFERENCES: ... ]
-            // rawRefString: "[REFERENCES: [{"title":...}]]"
-            // slice(refTag.length, closingIndex) -> " [{"title":...}]"
-            // Parse it.
-
-            // Note: The ending might be "]]" so lastIndexOf("]") is the last character.
-            // If it is "]]", then we need to cut up to that.
-            // Safest to cut from start of content to lastIndexOf("]").
-            const jsonCandidate = rawRefString.slice(
-              refTag.length,
-              rawRefString.lastIndexOf("]")
-            );
-
-            try {
-              referencesPayload = JSON.parse(jsonCandidate);
-              // Remove the entire tag string from displayContent
-              // Substring to remove is from refIndex to (refIndex + closingIndex + 1)
-              // Wait, rawRefString is a substring.
-              // So we remove rawRefString.substring(0, closingIndex + 1)
-
-              const tagString = rawRefString.substring(0, closingIndex + 1);
-              // Replace only the last occurrence (which is what refIndex points to)
-              // String.replace might replace first occurrence if strings are identical, which is rare for full content match but safer to use slice.
-              displayContent =
-                displayContent.slice(0, refIndex) +
-                displayContent.slice(refIndex + tagString.length);
-              displayContent = displayContent.trim();
-            } catch (e) {
-              // JSON partial or invalid, ignore
+        while ((match = refRegex.exec(displayContent)) !== null) {
+          const jsonString = match[1];
+          try {
+            const refs = JSON.parse(jsonString);
+            if (Array.isArray(refs)) {
+              allRefs.push(...refs);
             }
+            // Remove this specific match from final content
+            finalDisplayContent = finalDisplayContent.replace(match[0], "");
+          } catch (e) {
+            // console.log("Parsing error", e);
           }
+        }
+
+        // Trim strictly
+        finalDisplayContent = finalDisplayContent.trim();
+
+        // Deduplicate references by link
+        const uniqueRefs = Array.from(
+          new Map(allRefs.map((item) => [item["link"], item])).values()
+        );
+
+        // Limit to 3
+        if (uniqueRefs.length > 0) {
+          referencesPayload = uniqueRefs.slice(0, 3);
         }
 
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastMsg = newMessages[newMessages.length - 1];
-          lastMsg.content = displayContent;
-          lastMsg.contactPayload = contactPayload;
-          lastMsg.references = referencesPayload;
+          lastMsg.content = finalDisplayContent;
+          if (contactPayload) lastMsg.contactPayload = contactPayload;
+          if (referencesPayload && referencesPayload.length > 0)
+            lastMsg.references = referencesPayload;
           return newMessages;
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "ai",
-          content: "Sorry, I encountered an error. Please try again.",
-        },
-      ]);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        const errorMsg = {
+          role: "system",
+          content: `Error: ${error.message || "Something went wrong."}`,
+        };
+        if (last.role === "ai" && !last.content) {
+          return [...prev.slice(0, -1), errorMsg];
+        }
+        return [...prev, errorMsg];
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      {/* Compact Header */}
+    <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
+      {/* Social Sidebar (Fixed Right) */}
+      <div className="fixed right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-20 hidden md:flex">
+        {process.env.NEXT_PUBLIC_GITHUB && (
+          <a
+            href={process.env.NEXT_PUBLIC_GITHUB}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
+          >
+            <Image
+              src="/github-142-svgrepo-com.svg"
+              alt="GitHub"
+              width={24}
+              height={24}
+            />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_LINKEDIN && (
+          <a
+            href={process.env.NEXT_PUBLIC_LINKEDIN}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
+          >
+            <Image
+              src="/linkedin-svgrepo-com.svg"
+              alt="LinkedIn"
+              width={24}
+              height={24}
+            />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_UPWORK && (
+          <a
+            href={process.env.NEXT_PUBLIC_UPWORK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
+          >
+            <Image
+              src="/upwork-svgrepo-com.svg"
+              alt="Upwork"
+              width={24}
+              height={24}
+            />
+          </a>
+        )}
+      </div>
+
       <header className="px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-10 flex justify-between items-center shadow-sm">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -157,7 +235,6 @@ export default function Home() {
         </span>
       </header>
 
-      {/* Chat Area - Max Width for Compact Look */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-md mx-auto space-y-6">
           {messages.map((msg, index) => (
@@ -165,22 +242,37 @@ export default function Home() {
               key={index}
               className={`flex flex-col ${
                 msg.role === "user" ? "items-end" : "items-start"
-              }`}
+              } ${msg.role === "system" ? "items-center w-full" : ""}`}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className={`max-w-[90%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                  msg.role === "user"
-                    ? "bg-gray-900 text-white rounded-br-sm"
-                    : "bg-white text-gray-800 border border-gray-100 rounded-bl-sm"
-                }`}
-              >
-                <div className="markdown-body whitespace-pre-wrap">
+              {msg.role === "system" ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-medium border border-red-100"
+                >
+                  <AlertCircle size={14} />
                   {msg.content}
-                </div>
-              </motion.div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`max-w-[90%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                    msg.role === "user"
+                      ? "bg-gray-900 text-white rounded-br-sm"
+                      : "bg-white text-gray-800 border border-gray-100 rounded-bl-sm"
+                  }`}
+                >
+                  <div
+                    className={`prose prose-sm max-w-none ${
+                      msg.role === "user" ? "prose-invert" : ""
+                    }`}
+                  >
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                </motion.div>
+              )}
 
               {/* References Cards (Compact) */}
               {msg.role === "ai" &&
@@ -212,7 +304,7 @@ export default function Home() {
                           )}
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 leading-tight">
+                          <span className="text-xs font-semibold text-gray-800 group-hover:text-blue-600 leading-tight line-clamp-1 max-w-[150px]">
                             {ref.title}
                           </span>
                           <span className="text-[9px] text-gray-400 font-medium capitalize mt-0.5">
@@ -282,38 +374,93 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Input Area */}
       <div className="p-4 bg-white border-t border-gray-100">
-        <form onSubmit={handleSubmit} className="relative max-w-md mx-auto">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
-            className="w-full px-4 py-3 text-black bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-gray-900/5 focus:bg-white transition-all text-sm outline-none placeholder:text-gray-400"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="w-4 h-4"
+        <div className="max-w-md mx-auto relative">
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              rows={1}
+              className="w-full pl-4 pr-12 py-3 text-black bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-gray-900/5 focus:bg-white transition-all text-sm outline-none placeholder:text-gray-400 resize-none max-h-[150px] overflow-y-auto"
+              disabled={isLoading}
+            />
+            <button
+              onClick={() => handleSubmit()}
+              disabled={!input.trim() || isLoading}
+              className="absolute right-2 bottom-2 p-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"
-              />
-            </svg>
-          </button>
-        </form>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"
+                />
+              </svg>
+            </button>
+          </div>
+          <p className="text-[10px] text-center text-gray-400 mt-2">
+            Responses are generated by AI and may be inaccurate.
+          </p>
+        </div>
+      </div>
+
+      {/* Mobile Social Links */}
+      <div className="md:hidden fixed top-14 right-4 flex flex-col gap-2 z-20">
+        {process.env.NEXT_PUBLIC_GITHUB && (
+          <a
+            href={process.env.NEXT_PUBLIC_GITHUB}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
+          >
+            <Image
+              src="/github-142-svgrepo-com.svg"
+              alt="GitHub"
+              width={20}
+              height={20}
+            />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_LINKEDIN && (
+          <a
+            href={process.env.NEXT_PUBLIC_LINKEDIN}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
+          >
+            <Image
+              src="/linkedin-svgrepo-com.svg"
+              alt="LinkedIn"
+              width={20}
+              height={20}
+            />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_UPWORK && (
+          <a
+            href={process.env.NEXT_PUBLIC_UPWORK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
+          >
+            <Image
+              src="/upwork-svgrepo-com.svg"
+              alt="Upwork"
+              width={20}
+              height={20}
+            />
+          </a>
+        )}
       </div>
     </div>
   );

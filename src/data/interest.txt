@@ -1,0 +1,7 @@
+My strongest technical interest is Applied AI — not training models from scratch, but integrating powerful existing AI models into real-world systems. As a full-stack developer at heart, I care deeply about how AI can make everyday applications smarter, more useful, and more efficient for real users.
+
+I naturally explore emerging AI models, new developer tools and IDEs, the JavaScript ecosystem, system design concepts, and software architecture patterns. I closely follow research and discussions around artificial general intelligence (AGI) and enjoy understanding where the future of AI is heading.
+
+Beyond technology, I am highly interested in personal growth and human behavior. I read extensively about confidence, communication, psychology, and mindset. Books like *The 48 Laws of Power*, *Atomic Habits*, *The Courage to Be Disliked*, and writings on overthinking have significantly shaped how I view people, leadership, and self-improvement. These perspectives help me approach both life and engineering with clarity and emotional intelligence.
+
+I also enjoy studying history — especially the World Wars and how societies evolved after major global conflicts. In my personal life, I value relationships deeply. I love spending time with my family and loved ones, exploring new places, trying new experiences, and finding joy in giving, sharing happiness, and supporting the people around me. Meaningful conversations with friends about life, struggles, and growth matter a lot to me.
