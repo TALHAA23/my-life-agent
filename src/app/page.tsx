@@ -18,6 +18,7 @@ export default function Home() {
       content: string;
       contactPayload?: string;
       references?: any[];
+      skillMatch?: any;
     }[]
   >([
     {
@@ -83,6 +84,7 @@ export default function Home() {
 
         let contactPayload = undefined;
         let referencesPayload = undefined;
+        let skillMatchPayload = undefined;
         let displayContent = aiMessageContent;
 
         // 1. Check for Contact Action
@@ -94,16 +96,22 @@ export default function Home() {
           displayContent = displayContent.replace(contactMatch[0], "").trim();
         }
 
-        // 2. Check for References (Global Regex Replace)
-        // Match all occurrences of [REFERENCES: ... ]
-        // We use a regex that matches [REFERENCES: followed by non-greedy anything until ]] or ]
-        // Ideally JSON ends with ]].
+        // 2. Check for Skill Match
+        const skillMatch = displayContent.match(/\[SKILL_MATCH:\s*({.*?})\]/);
+        if (skillMatch) {
+          try {
+            skillMatchPayload = JSON.parse(skillMatch[1]);
+            displayContent = displayContent.replace(skillMatch[0], "").trim();
+          } catch (e) {
+            // Parsing error
+          }
+        }
+
+        // 3. Check for References (Global Regex Replace)
         const refRegex = /\[REFERENCES:\s*(\[.*?\])\]/g;
         let match;
         const allRefs = [];
 
-        // We might have multiple tags, we want to extract them all and remove them all from text.
-        // We clone displayContent to modify it cleanly.
         let finalDisplayContent = displayContent;
 
         while ((match = refRegex.exec(displayContent)) !== null) {
@@ -113,22 +121,18 @@ export default function Home() {
             if (Array.isArray(refs)) {
               allRefs.push(...refs);
             }
-            // Remove this specific match from final content
             finalDisplayContent = finalDisplayContent.replace(match[0], "");
           } catch (e) {
             // console.log("Parsing error", e);
           }
         }
 
-        // Trim strictly
         finalDisplayContent = finalDisplayContent.trim();
 
-        // Deduplicate references by link
         const uniqueRefs = Array.from(
           new Map(allRefs.map((item) => [item["link"], item])).values()
         );
 
-        // Limit to 3
         if (uniqueRefs.length > 0) {
           referencesPayload = uniqueRefs.slice(0, 3);
         }
@@ -140,6 +144,7 @@ export default function Home() {
           if (contactPayload) lastMsg.contactPayload = contactPayload;
           if (referencesPayload && referencesPayload.length > 0)
             lastMsg.references = referencesPayload;
+          if (skillMatchPayload) lastMsg.skillMatch = skillMatchPayload;
           return newMessages;
         });
       }
@@ -272,6 +277,76 @@ export default function Home() {
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   </div>
                 </motion.div>
+              )}
+
+              {/* Skill Match UI (Compact) */}
+              {msg.role === "ai" && msg.skillMatch && (
+                <div className="mt-3 w-full max-w-[90%] bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-gray-800 tracking-tight">
+                      Match Score
+                    </span>
+                    <span
+                      className={`text-xs font-bold ${
+                        msg.skillMatch.score >= 80
+                          ? "text-green-600"
+                          : msg.skillMatch.score >= 50
+                          ? "text-yellow-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {msg.skillMatch.score}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+                    <div
+                      className={`h-1.5 rounded-full ${
+                        msg.skillMatch.score >= 80
+                          ? "bg-green-500"
+                          : msg.skillMatch.score >= 50
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${msg.skillMatch.score}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mb-3 leading-snug">
+                    {msg.skillMatch.analysis}
+                  </p>
+
+                  <div className="space-y-2">
+                    {msg.skillMatch.matched &&
+                      msg.skillMatch.matched.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {msg.skillMatch.matched.map(
+                            (skill: string, i: number) => (
+                              <span
+                                key={`m-${i}`}
+                                className="px-2 py-0.5 bg-green-50 text-green-700 text-[10px] font-medium rounded-full border border-green-100"
+                              >
+                                ✓ {skill}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      )}
+                    {msg.skillMatch.missing &&
+                      msg.skillMatch.missing.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {msg.skillMatch.missing.map(
+                            (skill: string, i: number) => (
+                              <span
+                                key={`mis-${i}`}
+                                className="px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-medium rounded-full border border-gray-100 opacity-80"
+                              >
+                                ✗ {skill}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      )}
+                  </div>
+                </div>
               )}
 
               {/* References Cards (Compact) */}
