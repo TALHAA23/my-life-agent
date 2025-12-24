@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (file.type === "application/pdf") {
       // Promisify pdf2json
       textContent = await new Promise((resolve, reject) => {
-        const pdfParser = new PDFParser(null, 1); // 1 = text only
+        const pdfParser = new PDFParser(null, true); // 1 = text only
 
         pdfParser.on("pdfParser_dataError", (errData: any) =>
           reject(new Error(errData.parserError))
