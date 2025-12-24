@@ -32,6 +32,54 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Dynamic Placeholders Logic (Typing Effect)
+  const [placeholder, setPlaceholder] = useState("");
+
+  useEffect(() => {
+    const placeholders = [
+      "Ask about my projects or experience...",
+      "Can you build a full-stack Next.js app?",
+      "Do you have experience with AI agents or RAG?",
+      "How would you design a scalable dashboard?",
+      "What AI systems have you built?",
+      "Are you available for remote or contract work?",
+    ];
+
+    let currentIdx = 0;
+    let charIdx = 0;
+    let isDeleting = false;
+    let timeoutId: NodeJS.Timeout;
+
+    const type = () => {
+      const currentPhrase = placeholders[currentIdx];
+
+      if (isDeleting) {
+        setPlaceholder(currentPhrase.substring(0, charIdx - 1));
+        charIdx--;
+      } else {
+        setPlaceholder(currentPhrase.substring(0, charIdx + 1));
+        charIdx++;
+      }
+
+      let typeSpeed = isDeleting ? 30 : 50;
+
+      if (!isDeleting && charIdx === currentPhrase.length) {
+        typeSpeed = 2000; // Pause at end
+        isDeleting = true;
+      } else if (isDeleting && charIdx === 0) {
+        isDeleting = false;
+        currentIdx = (currentIdx + 1) % placeholders.length;
+        typeSpeed = 500; // Pause before new phrase
+      }
+
+      timeoutId = setTimeout(type, typeSpeed);
+    };
+
+    timeoutId = setTimeout(type, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -66,6 +114,17 @@ export default function Home() {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content:
+                "😅 Oops, I’ve hit my current limit. Please wait a little while and try again, I’ll be back soon!",
+            },
+          ]);
+          return; // Stop execution
+        }
         throw new Error(`Server responded with ${response.status}`);
       }
       if (!response.body) throw new Error("No response body");
@@ -457,7 +516,7 @@ export default function Home() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
+              placeholder={placeholder}
               rows={1}
               className="w-full pl-4 pr-12 py-3 text-black bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-gray-900/5 focus:bg-white transition-all text-sm outline-none placeholder:text-gray-400 resize-none max-h-[150px] overflow-y-auto"
               disabled={isLoading}

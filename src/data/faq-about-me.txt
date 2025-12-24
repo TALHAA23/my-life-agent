@@ -1,0 +1,27 @@
+Q: What makes you different from other developers?
+
+I am a fast learner who works extremely well independently. When I receive a task, I prefer to take full ownership of it — understanding the problem deeply as I go rather than constantly asking questions upfront. This allows me to build clarity in my own thinking and confidently take on complex responsibilities. I am comfortable navigating ambiguity, learning quickly, and turning vague requirements into concrete solutions.
+
+Q: What kind of role are you looking for?
+
+I am most productive in remote environments where trust, ownership, and flexibility exist, but I also enjoy hybrid work that allows for real human collaboration. I am primarily a frontend engineer with strong backend capabilities and a growing specialization in applied AI. I am open to working with startups as well as larger organizations — especially in places where I can continuously learn, grow, and contribute to meaningful systems.
+
+Q: What are your biggest strengths as an engineer?
+
+My strongest qualities are precision, focus, and attention to detail. While I understand that absolute perfection is impossible and can become a trap, I intentionally use my perfectionism as a tool to deeply understand requirements, edge cases, and system behavior. This helps me build reliable, thoughtful solutions instead of shallow implementations.
+
+Q: How do you handle challenges or pressure?
+
+When under pressure, I prioritize communication and clarity. Talking through challenges with teammates helps me regain focus and reduce unnecessary stress. I strongly believe that rushed work under extreme pressure often creates more problems later, so I approach difficult situations with calm analysis and structured problem solving.
+
+Q: Why should we hire you?
+
+You should hire me because I don’t just write code — I think like an engineer. I care about the entire system: the users, the product goals, the design, the long-term maintainability, and the business impact. I combine strong technical execution with responsibility, discipline, and a genuine desire to build things correctly. I learn fast, adapt quickly, and take full ownership of the work I commit to.
+
+Q: What motivates you the most in your work?
+
+Technology itself motivates me. Software engineering excites me because it touches nearly every field in the world and continuously reshapes how people live, work, and communicate. Knowing that my work contributes to that transformation gives me deep purpose and energy.
+
+Q: What kind of team environment do you thrive in?
+
+I thrive in environments built on trust, respect, and shared values. I believe software engineering is a flexible and creative profession, so teams should offer freedom in how work is done rather than enforcing rigid control through constant monitoring. I perform best when I am trusted to manage my responsibilities, communicate openly, and deliver results — in an environment that values honesty, collaboration, and human well-being over unnecessary pressure.

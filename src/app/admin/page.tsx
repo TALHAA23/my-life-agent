@@ -163,6 +163,7 @@ export default function AdminPage() {
                   <option value="Project">Project Documentation</option>
                   <option value="Thoughts">Thoughts / Blog</option>
                   <option value="Interest">Interest / Hobbies</option>
+                  <option value="Professional">Professional</option>
                   <option value="Other">Other</option>
                 </select>
               </div>

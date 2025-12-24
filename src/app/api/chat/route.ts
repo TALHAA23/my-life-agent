@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     // 1. RAG Retrieval
     const embeddings = new GoogleGenerativeAIEmbeddings({
-      model: "text-embedding-004",
+      model: `${process.env.NEXT_PUBLIC_GOOGLE_EMBEDDING_MODEL}`,
       apiKey: process.env.GOOGLE_API_KEY,
     });
 
@@ -162,12 +162,12 @@ export async function POST(req: NextRequest) {
     });
 
     const tools = [projectTool, certificateTool, skillTool];
-
     // 3. Initialize Model
     const model = new ChatGoogleGenerativeAI({
-      model: "gemini-2.5-flash",
+      model: `${process.env.NEXT_PUBLIC_GEMINI_MODEL}`,
       apiKey: process.env.GOOGLE_API_KEY,
       temperature: 0.3,
+      maxRetries: 2,
     });
 
     // 4. Create Agent
@@ -245,6 +245,17 @@ export async function POST(req: NextRequest) {
     });
   } catch (e: any) {
     console.error("Error in chat API:", e);
+    // Check for Rate Limit (429)
+    if (
+      e.status === 429 ||
+      e.message?.includes("429") ||
+      e.message?.includes("Too Many Requests")
+    ) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 }
+      );
+    }
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
