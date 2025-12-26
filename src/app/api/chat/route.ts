@@ -5,106 +5,72 @@ import {
   ChatGoogleGenerativeAI,
 } from "@langchain/google-genai";
 import { supabase } from "@/lib/supabase";
-import { DynamicStructuredTool } from "@langchain/core/tools";
+import { tool } from "langchain";
 import { z } from "zod";
 import {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-} from "@langchain/core/prompts";
-import {
-  AIMessage,
-  HumanMessage,
-  BaseMessage,
-  ToolMessage,
   SystemMessage,
+  HumanMessage,
+  AIMessage,
+  BaseMessage,
 } from "@langchain/core/messages";
-import { RunnableSequence } from "@langchain/core/runnables";
+import {
+  StateGraph,
+  START,
+  END,
+  MessagesAnnotation,
+  Annotation,
+} from "@langchain/langgraph";
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+import { MemorySaver } from "@langchain/langgraph"; // Try root import first for standard
+
+// OR import { MemorySaver } from "@langchain/langgraph/checkpoint";
 
 // Import data
 import projects from "@/utils/projects";
 import certificates from "@/utils/certificates";
 import { skills } from "@/utils/skill-set";
 
-// --- Custom "createAgent" Adapter (Pure LCEL - No Legacy Imports) ---
-async function createAgent({
-  model,
-  tools,
-  systemPrompt,
-}: {
-  model: any;
-  tools: any[];
-  systemPrompt: any;
-}) {
-  const toolMap = Object.fromEntries(tools.map((t) => [t.name, t]));
-  const modelWithTools = model.bindTools(tools);
+// 1. Define Tools
+const projectTool = tool(async () => JSON.stringify(projects), {
+  name: "getProjects",
+  description:
+    "Returns a list of Talha's projects. Use this when the user asks about projects, work, or portfolio.",
+  schema: z.object({}),
+});
+const certificateTool = tool(async () => JSON.stringify(certificates), {
+  name: "getCertificates",
+  description:
+    "Returns a list of Talha's certificates. Use this when the user asks about certifications, learning, or skills validation.",
+  schema: z.object({}),
+});
 
-  const prompt = ChatPromptTemplate.fromMessages([
-    new SystemMessage(
-      typeof systemPrompt === "string"
-        ? systemPrompt
-        : systemPrompt.content || ""
-    ),
-    new MessagesPlaceholder("chat_history"),
-  ]);
+const skillTool = tool(async () => JSON.stringify(skills), {
+  name: "getSkills",
+  description:
+    "Returns a detailed list of Talha's technical skills (Languages, Frontend, Backend, AI, etc.). Use this to evaluate job fit or answer skill questions.",
+  schema: z.object({}),
+});
 
-  const chain = RunnableSequence.from([prompt, modelWithTools]);
+const tools = [projectTool, certificateTool, skillTool];
+const toolNode = new ToolNode(tools);
 
-  return {
-    invoke: async ({ messages }: { messages: BaseMessage[] }) => {
-      let chatHistory = [...messages];
+// 2. Initialize Model
+const model = new ChatGoogleGenerativeAI({
+  model: `${process.env.NEXT_PUBLIC_GEMINI_MODEL}`,
+  apiKey: process.env.GOOGLE_API_KEY,
+  temperature: 0.3,
+  maxRetries: 2,
+}).bindTools(tools);
 
-      // Simple loop for tool execution (ReAct pattern)
-      const MAX_ITERATIONS = 5;
-      for (let i = 0; i < MAX_ITERATIONS; i++) {
-        const result = await chain.invoke({
-          chat_history: chatHistory,
-        });
-
-        // If no tool calls, we are done
-        if (!result.tool_calls || result.tool_calls.length === 0) {
-          return {
-            messages: [...messages, result],
-          };
-        }
-
-        // If there are tool calls, execute them
-        const toolMessages: ToolMessage[] = [];
-        for (const toolCall of result.tool_calls) {
-          const tool = toolMap[toolCall.name];
-          if (tool) {
-            console.log(`Executing tool: ${toolCall.name}`);
-            const toolOutput = await tool.invoke(toolCall.args);
-            toolMessages.push(
-              new ToolMessage({
-                tool_call_id: toolCall.id || "",
-                content: toolOutput,
-                name: toolCall.name,
-              })
-            );
-          }
-        }
-
-        // Append AIMessage (with tool calls) and ToolMessages to history
-        chatHistory = [...chatHistory, result, ...toolMessages];
-
-        // Loop triggers next iteration with updated history
-      }
-
-      return {
-        messages: [
-          ...messages,
-          new AIMessage("Agent stopped due to max iterations."),
-        ],
-      };
-    },
-  };
-}
+// 3. Global Checkpointer (Must be shared to persist memory across requests)
+const checkpointer = new MemorySaver();
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const messages = body.messages ?? [];
     const currentMessageContent = messages[messages.length - 1]?.content;
+    const conversationId = body.conversationId || "default-session"; // Default if missing
 
     if (!currentMessageContent) {
       return NextResponse.json(
@@ -113,7 +79,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. RAG Retrieval
+    // A. RAG Retrieval
     const embeddings = new GoogleGenerativeAIEmbeddings({
       model: `${process.env.NEXT_PUBLIC_GOOGLE_EMBEDDING_MODEL}`,
       apiKey: process.env.GOOGLE_API_KEY,
@@ -136,42 +102,8 @@ export async function POST(req: NextRequest) {
       console.error("RAG Search failed (ignoring):", err);
     }
 
-    // 2. Define Tools
-    const projectTool = new DynamicStructuredTool({
-      name: "getProjects",
-      description:
-        "Returns a list of Talha's projects. Use this when the user asks about projects, work, or portfolio.",
-      schema: z.object({}),
-      func: async () => JSON.stringify(projects),
-    });
-
-    const certificateTool = new DynamicStructuredTool({
-      name: "getCertificates",
-      description:
-        "Returns a list of Talha's certificates. Use this when the user asks about certifications, learning, or skills validation.",
-      schema: z.object({}),
-      func: async () => JSON.stringify(certificates),
-    });
-
-    const skillTool = new DynamicStructuredTool({
-      name: "getSkills",
-      description:
-        "Returns a detailed list of Talha's technical skills (Languages, Frontend, Backend, AI, etc.). Use this to evaluate job fit or answer skill questions.",
-      schema: z.object({}),
-      func: async () => JSON.stringify(skills),
-    });
-
-    const tools = [projectTool, certificateTool, skillTool];
-    // 3. Initialize Model
-    const model = new ChatGoogleGenerativeAI({
-      model: `${process.env.NEXT_PUBLIC_GEMINI_MODEL}`,
-      apiKey: process.env.GOOGLE_API_KEY,
-      temperature: 0.3,
-      maxRetries: 2,
-    });
-
-    // 4. Create Agent
-    const systemPrompt = `You are "My Bot", an AI agent answering on behalf of Talha.
+    // B. Re-Construct System Prompt (Dynamic)
+    const systemPromptText = `You are "My Bot", an AI agent answering on behalf of Talha.
 
     **Persona & Style**:
     1.  Speak in the first person ("I"). Represent Talha authentically.
@@ -233,27 +165,56 @@ export async function POST(req: NextRequest) {
         *   Topics: Extract 1-3 key topics (e.g., "Salary", "Next.js", "Contact").
     `;
 
-    const agent = await createAgent({
-      model,
-      tools,
-      systemPrompt,
-    });
+    // C. Define Graph LOCALLY (to capture systemPromptText)
 
-    // Process messages
-    // Note: createAgent expects full BaseMessage array
-    const chatHistory = messages.map((m: any) =>
-      m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
-    );
+    type AgentState = typeof MessagesAnnotation.State;
 
-    const result = await agent.invoke({
-      messages: chatHistory,
-    });
+    async function callModel(state: AgentState) {
+      // PREPEND the system message to the history.
+      // We filter out any previous SystemMessages to avoid duplication or confusion.
+      const history = state.messages.filter((m) => m._getType() !== "system");
 
+      // This ensures SystemMessage is ALWAYS first and CONTAINS the RAG context
+      const messagesWithSystem = [
+        new SystemMessage(systemPromptText),
+        ...history,
+      ];
+
+      const response = await model.invoke(messagesWithSystem);
+      return { messages: [response] };
+    }
+
+    function shouldContinue(state: typeof MessagesAnnotation.State) {
+      const messages = state.messages;
+      const lastMessage = messages[messages.length - 1] as AIMessage;
+      if (lastMessage.tool_calls?.length) {
+        return "tools";
+      }
+      return END;
+    }
+
+    const workflow = new StateGraph(MessagesAnnotation)
+      .addNode("agent", callModel)
+      .addNode("tools", toolNode)
+      .addEdge(START, "agent")
+      .addConditionalEdges("agent", shouldContinue, ["tools", END])
+      .addEdge("tools", "agent")
+      .compile({ checkpointer });
+
+    const config = { configurable: { thread_id: conversationId } };
+
+    // Invoke with ONLY the new message. The rest comes from MemorySaver.
+    const inputs = {
+      messages: [new HumanMessage(currentMessageContent)],
+    };
+
+    const result = await workflow.invoke(inputs, config);
+
+    // Get final message
     const finalMessage = result.messages[result.messages.length - 1];
     let finalContent = finalMessage.content as string;
 
     // --- ANALYTICS LOGGING START ---
-    const conversationId = body.conversationId;
 
     // Extract Analytics Tag
     let sentimentScore = 0;
@@ -336,7 +297,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e: any) {
     console.error("Error in chat API:", e);
-    // Check for Rate Limit (429)
     if (
       e.status === 429 ||
       e.message?.includes("429") ||
