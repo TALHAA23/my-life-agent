@@ -8,6 +8,7 @@ import {
   Award,
   ExternalLink,
   AlertCircle,
+  Calendar,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
@@ -19,6 +20,7 @@ export default function Home() {
       contactPayload?: string;
       references?: any[];
       skillMatch?: any;
+      showMeetingCard?: boolean;
     }[]
   >([
     {
@@ -74,6 +76,7 @@ export default function Home() {
       "How would you design a scalable dashboard?",
       "What AI systems have you built?",
       "Are you available for remote or contract work?",
+      "Can I book a meeting with you?",
     ];
 
     let currentIdx = 0;
@@ -188,6 +191,7 @@ export default function Home() {
         let contactPayload = undefined;
         let referencesPayload = undefined;
         let skillMatchPayload = undefined;
+        let meetingCardPayload = false;
         let displayContent = aiMessageContent;
 
         // 1. Check for Contact Action
@@ -210,7 +214,14 @@ export default function Home() {
           }
         }
 
-        // 3. Check for References (Global Regex Replace)
+        // 3. Check for Schedule Meeting
+        const meetingMatch = displayContent.match(/\[SCHEDULE_MEETING\]/);
+        if (meetingMatch) {
+          meetingCardPayload = true;
+          displayContent = displayContent.replace(meetingMatch[0], "").trim();
+        }
+
+        // 4. Check for References (Global Regex Replace)
         const refRegex = /\[REFERENCES:\s*(\[.*?\])\]/g;
         let match;
         const allRefs = [];
@@ -248,6 +259,7 @@ export default function Home() {
           if (referencesPayload && referencesPayload.length > 0)
             lastMsg.references = referencesPayload;
           if (skillMatchPayload) lastMsg.skillMatch = skillMatchPayload;
+          if (meetingCardPayload) lastMsg.showMeetingCard = true;
           return newMessages;
         });
       }
@@ -347,6 +359,22 @@ export default function Home() {
               width={24}
               height={24}
             />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_CALENDELY && (
+          <a
+            href={process.env.NEXT_PUBLIC_CALENDELY}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "calendly",
+                location: "sidebar",
+              })
+            }
+            className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100 text-purple-600"
+          >
+            <Calendar size={20} />
           </a>
         )}
       </div>
@@ -523,6 +551,41 @@ export default function Home() {
                   </div>
                 )}
 
+              {/* Meeting Card */}
+              {msg.role === "ai" &&
+                msg.showMeetingCard &&
+                process.env.NEXT_PUBLIC_CALENDELY && (
+                  <div className="mt-3 w-full max-w-[90%]">
+                    <a
+                      href={process.env.NEXT_PUBLIC_CALENDELY}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() =>
+                        trackEvent("click_meeting", { location: "chat_card" })
+                      }
+                      className="flex items-center justify-between p-4 bg-white border border-purple-100 rounded-xl shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-100 transition-colors">
+                          <Calendar size={20} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-gray-900 group-hover:text-purple-700">
+                            Book a Meeting
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Schedule a 15m call with me
+                          </span>
+                        </div>
+                      </div>
+                      <ExternalLink
+                        size={16}
+                        className="text-gray-300 group-hover:text-purple-400"
+                      />
+                    </a>
+                  </div>
+                )}
+
               {/* Contact Options */}
               {msg.role === "ai" && msg.contactPayload && (
                 <motion.div
@@ -692,6 +755,22 @@ export default function Home() {
               width={20}
               height={20}
             />
+          </a>
+        )}
+        {process.env.NEXT_PUBLIC_CALENDELY && (
+          <a
+            href={process.env.NEXT_PUBLIC_CALENDELY}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "calendly",
+                location: "mobile",
+              })
+            }
+            className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100 text-purple-600"
+          >
+            <Calendar size={16} />
           </a>
         )}
       </div>

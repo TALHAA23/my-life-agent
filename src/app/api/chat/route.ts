@@ -163,6 +163,8 @@ export async function POST(req: NextRequest) {
         *   Format: \`[ANALYTICS: {"sentiment": <float_-1.0_to_1.0>, "topics": ["<topic1>", "<topic2>"]}]\`
         *   Sentiment: -1.0 (Angry/Negative) to 1.0 (Happy/Positive).
         *   Topics: Extract 1-3 key topics (e.g., "Salary", "Next.js", "Contact").
+
+    5.  **Meetings**: If the user asks to schedule a call/meeting, do NOT output the link in text. Instead, simply append this tag at the very end: \`[SCHEDULE_MEETING]\`.
     `;
 
     // C. Define Graph LOCALLY (to capture systemPromptText)
