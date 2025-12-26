@@ -32,6 +32,37 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // --- ANALYTICS SESSION ---
+  const [sessionId, setSessionId] = useState("");
+
+  useEffect(() => {
+    // Generate or retrieve session ID
+    let sid = sessionStorage.getItem("mla_session_id");
+    if (!sid) {
+      sid = crypto.randomUUID();
+      sessionStorage.setItem("mla_session_id", sid);
+    }
+    setSessionId(sid);
+  }, []);
+
+  const trackEvent = async (eventType: string, eventData: any = {}) => {
+    if (!sessionId) return;
+    try {
+      await fetch("/api/analytics/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: sessionId,
+          eventType,
+          eventData,
+        }),
+      });
+    } catch (e) {
+      console.error("Tracking Error", e);
+    }
+  };
+  // -------------------------
+
   // Dynamic Placeholders Logic (Typing Effect)
   const [placeholder, setPlaceholder] = useState("");
 
@@ -110,6 +141,19 @@ export default function Home() {
             role,
             content,
           })),
+          conversationId: sessionId, // Pass session ID for tracking
+          referrer: typeof document !== "undefined" ? document.referrer : "",
+          deviceInfo:
+            typeof navigator !== "undefined"
+              ? {
+                  userAgent: navigator.userAgent,
+                  screen:
+                    typeof window !== "undefined"
+                      ? `${window.screen.width}x${window.screen.height}`
+                      : "",
+                  language: navigator.language,
+                }
+              : {},
         }),
       });
 
@@ -247,6 +291,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_GITHUB}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "github",
+                location: "sidebar",
+              })
+            }
             className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
           >
             <Image
@@ -262,6 +312,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_LINKEDIN}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "linkedin",
+                location: "sidebar",
+              })
+            }
             className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
           >
             <Image
@@ -277,6 +333,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_UPWORK}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "upwork",
+                location: "sidebar",
+              })
+            }
             className="p-2 bg-white rounded-full shadow-md hover:shadow-lg hover:scale-110 transition-all border border-gray-100"
           >
             <Image
@@ -419,6 +481,13 @@ export default function Home() {
                         href={ref.link}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() =>
+                          trackEvent("click_reference", {
+                            title: ref.title,
+                            type: ref.type,
+                            link: ref.link,
+                          })
+                        }
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: idx * 0.1 }}
@@ -467,6 +536,12 @@ export default function Home() {
                     }?text=${encodeURIComponent(msg.contactPayload)}`}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() =>
+                      trackEvent("click_contact", {
+                        type: "whatsapp",
+                        message: msg.contactPayload,
+                      })
+                    }
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-full transition-colors border border-green-200"
                   >
                     <Image
@@ -483,6 +558,12 @@ export default function Home() {
                     }?subject=${encodeURIComponent(
                       "Inquiry via AskTalha Bot"
                     )}&body=${encodeURIComponent(msg.contactPayload)}`}
+                    onClick={() =>
+                      trackEvent("click_contact", {
+                        type: "email",
+                        message: msg.contactPayload,
+                      })
+                    }
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium rounded-full transition-colors border border-red-200"
                   >
                     <Image
@@ -555,6 +636,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_GITHUB}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "github",
+                location: "mobile",
+              })
+            }
             className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
           >
             <Image
@@ -570,6 +657,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_LINKEDIN}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "linkedin",
+                location: "mobile",
+              })
+            }
             className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
           >
             <Image
@@ -585,6 +678,12 @@ export default function Home() {
             href={process.env.NEXT_PUBLIC_UPWORK}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() =>
+              trackEvent("click_social", {
+                platform: "upwork",
+                location: "mobile",
+              })
+            }
             className="p-1.5 bg-white rounded-full shadow-sm border border-gray-100"
           >
             <Image

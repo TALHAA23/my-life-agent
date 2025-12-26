@@ -188,7 +188,11 @@ export async function POST(req: NextRequest) {
         - If I am a perfect fit (80%+ match), say so confidently.
         - If I am a good fit but missing some minor things, say "I can handle this, but I might need to brush up on [X]".
         - If I am NOT a fit or if you are unsure (e.g., they need Rust, specific Embedded Systems exp), you **MUST** suggest contacting me to discuss.
-    3.  **Output**: Answer the user normally, THEN append the \`[SKILL_MATCH]\` tag (see rules below).
+    3.  **Proof of Fit**: You MUST select 1-3 specific Projects or Certificates from your tools that prove you have the required skills. Mention them briefly in your text (e.g., "My experience with the [Project Name] proves I can handle this...")
+    4.  **Output**: 
+        - Answer the user normally.
+        - **IMPORTANT**: Ensure the \`[REFERENCES]\` tag at the end contains the specific projects/certs you mentioned as proof.
+        - Append the \`[SKILL_MATCH]\` tag (see rules below).
 
     **Context from Documents**:
     ${context}
@@ -220,6 +224,13 @@ export async function POST(req: NextRequest) {
                "analysis": "<short_one_line_summary>"
             }
         *   Example: \`[SKILL_MATCH: {"score": 85, "matched": ["React", "Typescript"], "missing": ["AWS"], "analysis": "Strong frontend match, some backend gap."}]\`
+
+    4.  **Analytics (ALWAYS)**:
+        *   Analyze the user's input/sentiment.
+        *   Append the following JSON tag at the VERY END (hidden field):
+        *   Format: \`[ANALYTICS: {"sentiment": <float_-1.0_to_1.0>, "topics": ["<topic1>", "<topic2>"]}]\`
+        *   Sentiment: -1.0 (Angry/Negative) to 1.0 (Happy/Positive).
+        *   Topics: Extract 1-3 key topics (e.g., "Salary", "Next.js", "Contact").
     `;
 
     const agent = await createAgent({
@@ -239,8 +250,88 @@ export async function POST(req: NextRequest) {
     });
 
     const finalMessage = result.messages[result.messages.length - 1];
+    let finalContent = finalMessage.content as string;
 
-    return new NextResponse(finalMessage.content as string, {
+    // --- ANALYTICS LOGGING START ---
+    const conversationId = body.conversationId;
+
+    // Extract Analytics Tag
+    let sentimentScore = 0;
+    let topics: string[] = [];
+    const analyticsMatch = finalContent.match(/\[ANALYTICS:\s*({.*?})\]/);
+    if (analyticsMatch) {
+      try {
+        const analyticsData = JSON.parse(analyticsMatch[1]);
+        sentimentScore = analyticsData.sentiment || 0;
+        topics = analyticsData.topics || [];
+        // Remove tag from content sent to user
+        finalContent = finalContent.replace(analyticsMatch[0], "").trim();
+      } catch (e) {
+        console.error("Analytics Parse Error", e);
+      }
+    }
+
+    // We only log if a conversationId is provided (from frontend)
+    if (conversationId) {
+      try {
+        const { referrer, deviceInfo } = body;
+
+        // 1. Ensure Conversation Exists (Idempotent insert/ignore)
+        const updateData: any = {
+          id: conversationId,
+          metadata: { last_updated: new Date() },
+        };
+        if (referrer) updateData.referrer = referrer;
+        if (deviceInfo) updateData.device_info = deviceInfo;
+
+        await supabase
+          .from("analytics_conversations")
+          .upsert(updateData, { onConflict: "id" });
+
+        // 2. Log User Message
+        await supabase.from("analytics_messages").insert({
+          conversation_id: conversationId,
+          role: "user",
+          content: currentMessageContent,
+          sentiment_score: sentimentScore,
+          topics: topics,
+        });
+
+        // 3. Log AI Message
+        await supabase.from("analytics_messages").insert({
+          conversation_id: conversationId,
+          role: "ai",
+          content: finalContent,
+        });
+
+        // 4. Extract & Log Events (Skill Match)
+        const skillMatch = finalContent.match(/\[SKILL_MATCH:\s*({.*?})\]/);
+        if (skillMatch) {
+          const payload = JSON.parse(skillMatch[1]);
+          await supabase.from("analytics_events").insert({
+            conversation_id: conversationId,
+            event_type: "skill_match",
+            event_data: payload,
+          });
+        }
+
+        // 5. Extract & Log Events (Contact Action)
+        const contactMatch = finalContent.match(/\[CONTACT_ACTION:\s*(.*?)\]/);
+        if (contactMatch) {
+          const payload = contactMatch[1];
+          await supabase.from("analytics_events").insert({
+            conversation_id: conversationId,
+            event_type: "contact_suggestion",
+            event_data: { message: payload },
+          });
+        }
+      } catch (logParams) {
+        console.error("Analytics Error:", logParams);
+      }
+    }
+    // --- ANALYTICS LOGGING END ---
+
+    return new NextResponse(finalContent, {
       headers: { "Content-Type": "text/plain" },
     });
   } catch (e: any) {
