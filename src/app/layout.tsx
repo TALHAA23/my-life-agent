@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Talha's AI Agent",
-  description: "Talha's AI Agent",
+  title: "Ask Talha",
+  description: "Ask Talha about anything like projects, skills, and more.",
 };
 
 export default function RootLayout({
