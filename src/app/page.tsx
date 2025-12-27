@@ -379,7 +379,7 @@ export default function Home() {
         )}
       </div>
 
-      <header className="px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-10 flex justify-between items-center shadow-sm">
+      <header className="px-4 py-3  bg-white border-b border-gray-200 sticky top-0 z-10 flex justify-between items-center shadow-sm">
         <div className="flex items-center space-x-2">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
           <h1 className="text-sm font-semibold text-gray-900">AskTalha</h1>
